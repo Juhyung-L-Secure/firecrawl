@@ -17,9 +17,9 @@ method names, parameters, and examples without wasting context window on WebFetc
 
 ## Paths and Output Folder
 
-Use [scripts/paths.py](scripts/paths.py) to resolve this Firecrawl checkout and
-read the saved output folder. It follows the helper's real path through symlinks;
-never infer the repository from the current working directory.
+Use [scripts/paths.py](scripts/paths.py) to resolve this Firecrawl checkout and read the output folder saved for the consuming project. The Firecrawl checkout follows the helper's real path through symlinks; the consuming project follows the Git repository root of the working directory.
+
+When a session starts in a parent workspace, pass the target repository with `--project-dir "<target-project-folder>"`. If the target is unclear, ask which repository the crawl results belong to. Keep using the returned absolute `project_dir` for subsequent helper calls, even after changing directories to start or stop Firecrawl. A directory outside a Git repository fails rather than choosing another project.
 
 Before checking the manifest or starting Firecrawl, run:
 
@@ -27,27 +27,22 @@ Before checking the manifest or starting Firecrawl, run:
 python3 "$HOME/.agents/skills/firecrawl/scripts/paths.py"
 ```
 
-The JSON result contains `repo_dir`, `output_dir`, and `config_file`.
+The JSON result contains `repo_dir` (the Firecrawl checkout), `project_dir` (the consuming Git repository), `output_dir`, and `config_file`.
 
-- If `output_dir` is `null`, ask the user once: "Which folder should store your
-  crawled documentation? Give an absolute path or a path starting with `~/`."
-  Wait for the answer, then save that exact choice with the helper:
+- If `output_dir` is `null`, ask once for this project: "Which folder should store crawled documentation for this project? Give an absolute path or a path starting with `~/`." Wait for the answer, then save that exact choice with the helper:
 
   ```bash
-  python3 "$HOME/.agents/skills/firecrawl/scripts/paths.py" --output-dir "USER_CHOSEN_FOLDER"
+  python3 "$HOME/.agents/skills/firecrawl/scripts/paths.py" --project-dir "<resolved-project-root>" --output-dir "USER_CHOSEN_FOLDER"
   ```
 
-- The choice is recorded in `~/.config/firecrawl/skill.json`, outside the clone,
-  and reused on later calls. Do not ask again unless the user requests a change.
-- If the helper reports an invalid config or path, stop and report the error.
-  Do not replace it with a default, another config file, or another output folder.
+- Choices are recorded in `~/.config/firecrawl/skill.json`, outside the clone, as a `projects` map from absolute consuming repository roots to output folders. Reuse each project's choice on later calls. A new repository prompts for its own folder; saving its choice preserves other projects' entries. Do not ask again for a configured project unless the user requests a change.
+- If the helper reports an invalid config or path, stop and report the error. Do not replace it with a default, another config file, or another project's output folder.
 
-After the folder is configured, use this setup before each shell call that needs
-repository or output paths; shell variables do not persist between tool calls:
+After this project's folder is configured, use this setup before each shell call that needs repository or output paths; shell variables do not persist between tool calls:
 
 ```bash
 set -e
-FIRECRAWL_PATHS="$(python3 "$HOME/.agents/skills/firecrawl/scripts/paths.py")"
+FIRECRAWL_PATHS="$(python3 "$HOME/.agents/skills/firecrawl/scripts/paths.py" --project-dir "<resolved-project-root>")"
 FIRECRAWL_REPO="$(printf '%s' "$FIRECRAWL_PATHS" | python3 -c 'import json, sys; print(json.load(sys.stdin)["repo_dir"])')"
 SHARED_DIR="$(printf '%s' "$FIRECRAWL_PATHS" | python3 -c 'import json, sys; paths = json.load(sys.stdin); assert paths["output_dir"] is not None, "Output folder has not been configured"; print(paths["output_dir"])')"
 MANIFEST="${SHARED_DIR}/manifest.json"
